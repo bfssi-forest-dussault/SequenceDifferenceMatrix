@@ -14,9 +14,18 @@ from Bio import SeqIO, pairwise2, Seq
                     "a clustermap of pairwise alignment scores. Optionally takes a tab-delimited coding file as input "
                     "to provide additional annotation on the clustermap. Note that this program expects nucleotide "
                     "sequences.")
-@click.option('-f', '--fasta', required=True, help='Single input .FASTA file containing nucleotide records to compare.')
-@click.option('-o', '--outdir', required=True, help='Path to desired output directory.')
-@click.option('-c', '--coding-file', required=False, default=None,
+@click.option('-f', '--fasta',
+              type=click.Path(exists=True, dir_okay=False),
+              required=True,
+              help='Single input .FASTA file containing nucleotide records to compare.')
+@click.option('-o', '--outdir',
+              type=click.Path(),
+              required=True,
+              help='Path to desired output directory.')
+@click.option('-c', '--coding-file',
+              required=False,
+              type=click.Path(exists=True, dir_okay=False),
+              default=None,
               help='Tab-delimited, two column file containing sequence record names and associated metadata, '
                    'e.g. expected genotype. This file will add additional values to the final clustermap. '
                    'A header row is expected, but the names for the two columns do not matter.')
@@ -102,10 +111,6 @@ def generate_color_coding_dict(coding_dict: dict):
 
 def alignment_score_clustermap(fasta: Path, outdir: Path, coding_file: Optional[Path]):
     """ Main method call for conducting pairwise comparisons of all records within FASTA, generating clustermap """
-    if coding_file:
-        row_colors = True
-    else:
-        row_colors = False
 
     fasta_dict = fasta_to_dict(fasta)
     print(f"Analyzing {len(fasta_dict.keys())} total samples")
@@ -119,10 +124,10 @@ def alignment_score_clustermap(fasta: Path, outdir: Path, coding_file: Optional[
     print(f"Writing csv to {out_csv}")
     df.to_csv(out_csv)
 
-    # Generate clustermap image
     out_png = outdir / fasta.with_suffix(".png").name
     print(f"Writing clustermap to {out_png}")
-    if row_colors:
+    # If the coding file was provided, attempt to add metadata to clustermap
+    if coding_file:
         coding_dict = parse_coding_file(coding_file)
         color_dict = generate_color_coding_dict(coding_dict)
         colors_series = [color_dict[coding_dict[x]] for x in list(df.index.values)]
@@ -132,6 +137,7 @@ def alignment_score_clustermap(fasta: Path, outdir: Path, coding_file: Optional[
             sns_plot.ax_col_dendrogram.bar(0, 0, color=color_dict[label], label=label, linewidth=0)
         sns_plot.ax_col_dendrogram.legend(loc="center", ncol=5)
         sns_plot.savefig(out_png)
+    # Generate simple clustermap
     else:
         sns_plot = sns.clustermap(df, method="single", figsize=(32, 32))
         sns_plot.savefig(out_png)
