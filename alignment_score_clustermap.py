@@ -10,7 +10,7 @@ from collections import defaultdict
 from Bio import SeqIO, pairwise2, Seq
 
 
-@click.command(help="Conducts global pairwise alignments against all records in an input FASTAS file, then generates "
+@click.command(help="Conducts global pairwise alignments against all records in an input FASTA file, then generates "
                     "a clustermap of pairwise alignment scores. Optionally takes a tab-delimited coding file as input "
                     "to provide additional annotation on the clustermap. Note that this program expects nucleotide "
                     "sequences.")
@@ -21,14 +21,16 @@ from Bio import SeqIO, pairwise2, Seq
                    'e.g. expected genotype. This file will add additional values to the final clustermap. '
                    'A header row is expected, but the names for the two columns do not matter.')
 def cli(fasta, outdir, coding_file):
+    """ CLI interface """
     fasta = Path(fasta)
     outdir = Path(outdir)
     if coding_file is not None:
         coding_file = Path(coding_file)
-    compare(fasta, outdir, coding_file)
+    alignment_score_clustermap(fasta, outdir, coding_file)
 
 
 def fasta_to_dict(fasta: Path) -> dict:
+    """ Parses fasta file with BioPython, return dict containing {fasta_header:SeqRecord} structure """
     f = open(str(fasta))
     fasta_dict = SeqIO.to_dict(SeqIO.parse(f, "fasta"))
     fasta_dict = dict(sorted(fasta_dict.items()))
@@ -36,27 +38,32 @@ def fasta_to_dict(fasta: Path) -> dict:
 
 
 def generate_sample_pairs(fasta_dict: dict) -> [tuple]:
+    """ Generates pairs (with replacement) for every key (i.e. FASTA record header) in fasta_dict """
     sample_pairs = list(itertools.combinations_with_replacement(fasta_dict.keys(), 2))
     return sample_pairs
 
 
 def get_sample_pair_sequences(fasta_dict: dict, pair: tuple) -> tuple:
+    """ Retrieve the sequence records from fasta_dict for a given pair of records """
     seq1 = fasta_dict[pair[0]]
     seq2 = fasta_dict[pair[1]]
     return seq1, seq2
 
 
 def translate_sequence(sample: SeqIO.SeqRecord, translation_code: int = 11) -> tuple:
+    """ Translates nt sequence according to translation code, which defaults to Bacterial (11) """
     return sample.seq.translate(translation_code)
 
 
 def get_alignment_score(seq1: Seq, seq2: Seq) -> float:
+    """ Conducts globalxx alignment between two sequences with Biopython and returns the alignment score"""
     alignments = pairwise2.align.globalxx(seq1, seq2, one_alignment_only=True)
     alignment_score = alignments[0][2]
     return alignment_score
 
 
 def do_pairwise_alignments(sample_pairs: [tuple], fasta_dict: dict) -> dict:
+    """ Iterates over each sample record pair and generates a defaultdict containing every pair aligment scores """
     alignment_score_dict = defaultdict(dict)
     for pair in tqdm(sample_pairs):
         seq1, seq2 = get_sample_pair_sequences(fasta_dict, pair)
@@ -86,13 +93,15 @@ def parse_coding_file(coding_file: Path) -> dict:
 
 
 def generate_color_coding_dict(coding_dict: dict):
+    """ Creates a dict associating every unique value in the coding dict with a unique colour """
     coding_values = list(set([i for i in coding_dict.values()]))
     colors = sns.color_palette("Paired", len(coding_values))
     color_dict = dict(zip(coding_values, colors))
     return color_dict
 
 
-def compare(fasta: Path, outdir: Path, coding_file: Optional[Path]):
+def alignment_score_clustermap(fasta: Path, outdir: Path, coding_file: Optional[Path]):
+    """ Main method call for conducting pairwise comparisons of all records within FASTA, generating clustermap """
     if coding_file:
         row_colors = True
     else:
